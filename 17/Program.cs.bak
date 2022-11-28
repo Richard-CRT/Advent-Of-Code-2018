@@ -1,0 +1,371 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using _17;
+using AdventOfCodeUtilities;
+
+namespace _17
+{
+    public static class Program
+    {
+        public static int MapMinimumX;
+        public static int MapMinimumY;
+        public static int MapMaximumX;
+        public static int MapMaximumY;
+        public static int MapDepth;
+
+        public static List<ScanCell>[] Map;
+
+        static void Main(string[] args)
+        {
+            List<string> inputList = AoCUtilities.GetInput();
+
+            List<Vein> veins = new List<Vein>();
+
+            MapMinimumX = int.MaxValue;
+            MapMinimumY = int.MaxValue;
+            MapMaximumX = -1;
+            MapMaximumY = -1;
+
+            for (int i = 0; i < inputList.Count; i++)
+            {
+                string[] veinStringParts = inputList[i].Split(' ');
+                string fixedCoordinateString = veinStringParts[0].Substring(0, veinStringParts[0].Length - 1);
+                string variableCoordinateString = veinStringParts[1];
+
+                int xStart;
+                int xEnd;
+                int yStart;
+                int yEnd;
+
+                string[] variableCoordinateStringParts = variableCoordinateString.Substring(2).Split('.');
+
+                if (fixedCoordinateString.Substring(0, 1) == "x")
+                {
+                    xStart = Int32.Parse(fixedCoordinateString.Substring(2, fixedCoordinateString.Length - 2));
+                    xEnd = xStart;
+                    yStart = Int32.Parse(variableCoordinateStringParts[0]);
+                    yEnd = Int32.Parse(variableCoordinateStringParts[2]);
+                }
+                else
+                {
+                    yStart = Int32.Parse(fixedCoordinateString.Substring(2, fixedCoordinateString.Length - 2));
+                    yEnd = yStart;
+                    xStart = Int32.Parse(variableCoordinateStringParts[0]);
+                    xEnd = Int32.Parse(variableCoordinateStringParts[2]);
+                }
+
+                //if (yEnd > 50)
+                //{
+                //    continue;
+                //}
+
+                if (xStart < MapMinimumX)
+                {
+                    MapMinimumX = xStart;
+                }
+                if (xEnd > MapMaximumX)
+                {
+                    MapMaximumX = xEnd;
+                }
+                if (yStart < MapMinimumY)
+                {
+                    MapMinimumY = yStart;
+                }
+                if (yEnd > MapMaximumY)
+                {
+                    MapMaximumY = yEnd;
+                }
+
+                veins.Add(new Vein(xStart, xEnd, yStart, yEnd));
+            }
+
+            MapDepth = MapMaximumY + 1;
+            Map = new List<ScanCell>[MapDepth];
+
+            for (int y = 0; y < MapDepth; y++)
+            {
+                Map[y] = new List<ScanCell>();
+                for (int x = MapMinimumX; x <= MapMaximumX; x++)
+                {
+                    Map[y].Add(new ScanCell(y, x));
+                    if (y == 0 && x == 500)
+                    {
+                        GetMapScanCell(y, x).Type = ScanCellType.Spring;
+                    }
+                }
+            }
+
+            foreach (Vein vein in veins)
+            {
+                for (int y = vein.YStart; y <= vein.YEnd; y++)
+                {
+                    for (int x = vein.XStart; x <= vein.XEnd; x++)
+                    {
+                        GetMapScanCell(y, x).Type = ScanCellType.Clay;
+                    }
+                }
+            }
+
+            PrintMap();
+
+            int oldCellsWaterReached = -1;
+            int cellsWaterReached = 0;
+            while (oldCellsWaterReached != cellsWaterReached)
+            {
+                oldCellsWaterReached = cellsWaterReached;
+                Tick();
+
+                cellsWaterReached = 0;
+                for (int y = 0; y <= MapMaximumY; y++)
+                {
+                    for (int x = MapMinimumX; x <= MapMaximumX; x++)
+                    {
+                        ScanCell cell = GetMapScanCell(y, x);
+                        if (cell.Type == ScanCellType.DrySand || cell.Type == ScanCellType.Water)
+                        {
+                            cellsWaterReached++;
+                        }
+                    }
+                }
+                //PrintMap();
+            }
+            Console.WriteLine("Water reached {0} cells", cellsWaterReached);
+            Console.ReadLine();
+        }
+
+        public static void Tick()
+        {
+            List<ScanCell> cellsToTick = new List<ScanCell>();
+
+            for (int y = 0; y < MapDepth; y++)
+            {
+                for (int x = MapMinimumX; x <= MapMaximumX; x++)
+                {
+                    ScanCell cell = GetMapScanCell(y, x);
+                    cell.Ticked = false;
+                    switch (cell.Type)
+                    {
+                        case ScanCellType.Spring:
+                        case ScanCellType.Water:
+                            cellsToTick.Add(cell);
+                            break;
+                    }
+                }
+            }
+
+            foreach (ScanCell cell in cellsToTick)
+            {
+                if (!cell.Ticked)
+                {
+                    cell.Tick(null);
+                }
+            }
+        }
+
+        public static ScanCell GetMapScanCell(int y, int x)
+        {
+            if (y < MapDepth)
+            {
+                if (x > MapMaximumX)
+                {
+                    for (int yi = 0; yi < MapDepth; yi++)
+                    {
+                        for (int i = 0; i < x - MapMaximumX; i++)
+                        {
+                            Map[yi].Add(new ScanCell(yi, MapMaximumX + i + 1));
+                        }
+                    }
+                    MapMaximumX += x - MapMaximumX;
+                }
+                int shiftedX = x - MapMinimumX;
+                return Map[y][shiftedX];
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        public static void SetMapScanCell(int y, int x, ScanCell scanCell)
+        {
+            Map[y][x - MapMinimumX] = scanCell;
+        }
+
+        public static void PrintMap()
+        {
+#if DEBUG
+            AoCUtilities.DebugClear();
+            string toPrint = "";
+            toPrint += "   ";
+            for (int x = MapMinimumX; x <= MapMaximumX; x++)
+            {
+                toPrint += string.Format("{0}", x / 100);
+            }
+            toPrint += "\n";
+            toPrint += "   ";
+            for (int x = MapMinimumX; x <= MapMaximumX; x++)
+            {
+                toPrint += string.Format("{0}", (x - ((x / 100) * 100)) / 10);
+            }
+            toPrint += "\n";
+            toPrint += "   ";
+            for (int x = MapMinimumX; x <= MapMaximumX; x++)
+            {
+                toPrint += string.Format("{0}", (x - ((x / 100) * 100)) % 10);
+            }
+            toPrint += "\n";
+
+            for (int y = 0; y <= MapMaximumY; y++)
+            {
+                toPrint += string.Format("{0} ", y.ToString().PadLeft(2, ' '));
+                for (int x = MapMinimumX; x <= MapMaximumX; x++)
+                {
+                    toPrint += string.Format("{0}", (char)GetMapScanCell(y, x).Type);
+                }
+                toPrint += "\n";
+            }
+            toPrint += "\n";
+            AoCUtilities.DebugWrite(toPrint);
+
+            /*
+            AoCUtilities.DebugWrite("   ");
+            for (int x = MapMinimumX; x <= MapMaximumX; x++)
+            {
+                AoCUtilities.DebugWrite("{0}", x / 100);
+            }
+            AoCUtilities.DebugWriteLine();
+            AoCUtilities.DebugWrite("   ");
+            for (int x = MapMinimumX; x <= MapMaximumX; x++)
+            {
+                AoCUtilities.DebugWrite("{0}", (x - ((x / 100) * 100)) / 10);
+            }
+            AoCUtilities.DebugWriteLine();
+            AoCUtilities.DebugWrite("   ");
+            for (int x = MapMinimumX; x <= MapMaximumX; x++)
+            {
+                AoCUtilities.DebugWrite("{0}", (x - ((x / 100) * 100)) % 10);
+            }
+            AoCUtilities.DebugWriteLine();
+
+            for (int y = 0; y <= MapMaximumY; y++)
+            {
+                AoCUtilities.DebugWrite("{0} ", y.ToString().PadLeft(2, ' '));
+                for (int x = MapMinimumX; x <= MapMaximumX; x++)
+                {
+                    AoCUtilities.DebugWrite("{0}", (char)GetMapScanCell(y, x).Type);
+                }
+                AoCUtilities.DebugWriteLine();
+            }
+            AoCUtilities.DebugWriteLine();
+            */
+#endif
+        }
+    }
+}
+
+public enum ScanCellType { Spring = '+', UntouchedSand = ' ', Clay = '▓', DrySand = '▒', Water = '█' };
+
+public class ScanCell
+{
+    public int Y;
+    public int X;
+    public bool Ticked;
+    public bool Settled = false;
+
+    public ScanCellType Type = ScanCellType.UntouchedSand;
+
+    public ScanCell(int y, int x)
+    {
+        Y = y;
+        X = x;
+    }
+
+    public void Tick(ScanCell tickSource)
+    {
+        Ticked = true;
+        switch (Type)
+        {
+            case ScanCellType.Spring:
+                {
+                    ScanCell cellBelow = Program.GetMapScanCell(this.Y + 1, this.X);
+                    if (cellBelow.Type == ScanCellType.Water)
+                    {
+                        cellBelow.Tick(this);
+                    }
+                    cellBelow.Type = ScanCellType.Water;
+                    break;
+                }
+            case ScanCellType.Water:
+                {
+                    if (!Settled)
+                    {
+                        Settled = true;
+                        ScanCell cellBelow = Program.GetMapScanCell(this.Y + 1, this.X);
+                        if (cellBelow != null && cellBelow.Type == ScanCellType.Water)
+                        {
+                            cellBelow.Tick(this);
+                        }
+                        if (cellBelow == null || cellBelow.Type == ScanCellType.UntouchedSand || cellBelow.Type == ScanCellType.DrySand)
+                        {
+                            this.Type = ScanCellType.DrySand;
+                            if (cellBelow != null)
+                            {
+                                cellBelow.Type = ScanCellType.Water;
+                            }
+                            Settled = false;
+                        }
+                        else
+                        {
+                            ScanCell cellLeft = Program.GetMapScanCell(this.Y, this.X - 1);
+                            ScanCell cellRight = Program.GetMapScanCell(this.Y, this.X + 1);
+                            if (cellLeft.Type == ScanCellType.Water && tickSource != cellLeft)
+                            {
+                                cellLeft.Tick(this);
+                            }
+                            if (cellRight.Type == ScanCellType.Water && tickSource != cellRight)
+                            {
+                                cellRight.Tick(this);
+                            }
+
+                            if (cellLeft.Type == ScanCellType.UntouchedSand || cellLeft.Type == ScanCellType.DrySand)
+                            {
+                                this.Type = ScanCellType.DrySand;
+                                cellLeft.Type = ScanCellType.Water;
+                                Settled = false;
+                            }
+                            if (cellRight.Type == ScanCellType.Water && tickSource != cellRight)
+                            {
+                                cellRight.Tick(this);
+                            }
+                            if (cellRight.Type == ScanCellType.UntouchedSand || cellRight.Type == ScanCellType.DrySand)
+                            {
+                                this.Type = ScanCellType.DrySand;
+                                cellRight.Type = ScanCellType.Water;
+                                Settled = false;
+                            }
+                        }
+                    }
+                    break;
+                }
+        }
+    }
+}
+
+public class Vein
+{
+    public int XStart;
+    public int XEnd;
+    public int YStart;
+    public int YEnd;
+
+    public Vein(int xStart, int xEnd, int yStart, int yEnd)
+    {
+        XStart = xStart;
+        XEnd = xEnd;
+        YStart = yStart;
+        YEnd = yEnd;
+    }
+}
